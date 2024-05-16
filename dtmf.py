@@ -15,6 +15,7 @@ parser.add_argument("-r", "--right", help="right channel only (if the sound is s
 parser.add_argument("-d", "--debug", help="show graphs to debug", action="store_true")
 parser.add_argument("-t", type=int, metavar="F", help="acceptable frequency error (in hertz, 20 by default)", default=20)
 parser.add_argument("-i", type=float, metavar='T', help="process by T seconds intervals (0.04 by default)", default=0.04)
+parser.add_argument("-f", type=float, metavar="FRAC", help="process by shifting interval by 1/FRAC (3.0 by default)", default=3.0)
 
 parser.add_argument('file', type=argparse.FileType('r'))
 
@@ -58,7 +59,9 @@ precision = args.i
 
 duration = len(data)/fps
 
-step = int(len(data)//(duration//precision))
+window = int(len(data)//(duration//precision))
+
+step = int(window//args.f)
 
 debug = args.debug
 verbose = args.verbose
@@ -71,8 +74,8 @@ if verbose:
     print ("0:00 ", end='', flush=True)
 
 try:
-    for i in range(0, len(data)-step, step):
-        signal = data[i:i+step]
+    for i in range(0, len(data)-window, step):
+        signal = data[i:i+window]
         # Since Fourier transforms work best on periodic signals, we can
         # fake it for this slice of signal by appending a mirrored
         # copy. This helps limit the noise in low-frequency bins.
@@ -86,7 +89,7 @@ try:
             plt.xticks([])
             plt.yticks([])
             plt.axvline(x=i, linewidth=1, color='red')
-            plt.axvline(x=i+step, linewidth=1, color='red')
+            plt.axvline(x=i+window, linewidth=1, color='red')
             plt.subplot(312)
             plt.title("analysed frame")
             plt.plot(signal)
@@ -154,9 +157,9 @@ try:
             plt.xlabel(txt)
 
 
-        t = int(i//step * precision)
+        t = int(i//window * precision)
 
-        if verbose and t > int((i-1)//step * precision):
+        if verbose and t > int((i-step)//window * precision):
             m = str(int(t//60))
             s = str(t%60)
             s = "0"*(2-len(s)) + s
