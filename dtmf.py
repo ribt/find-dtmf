@@ -73,6 +73,23 @@ if debug:
 if verbose:
     print ("0:00 ", end='', flush=True)
 
+def findbest(freq, amp, maxdelta, freqlist):
+    maxf = freq[np.where(amp == max(amp))[0][0]]
+
+    delta = maxdelta
+    best = 0
+
+    for f in freqlist:
+        if abs(maxf-f) < delta:
+            delta = abs(maxf-f)
+            best = f
+
+    if debug:
+        plt.plot(freq, amp)
+        plt.annotate(str(int(maxf))+"Hz", xy=(maxf, max(amp)))
+
+    return best
+
 try:
     for i in range(0, len(data)-window, step):
         signal = data[i:i+window]
@@ -109,22 +126,7 @@ try:
         freq = frequencies[i_min:i_max]
         amp = abs(amplitudes.real[i_min:i_max])
 
-        lf = freq[np.where(amp == max(amp))[0][0]]
-
-        delta = args.t
-        best = 0
-
-        for f in [697, 770, 852, 941]:
-            if abs(lf-f) < delta:
-                delta = abs(lf-f)
-                best = f
-
-        if debug:
-            plt.plot(freq, amp)
-            plt.yticks([])
-            plt.annotate(str(int(lf))+"Hz", xy=(lf, max(amp)))
-
-        lf = best
+        lf = findbest(freq, amp, args.t, [697, 770, 852, 941])
 
         # High
         i_min = np.where(frequencies > 1100)[0][0]
@@ -133,21 +135,7 @@ try:
         freq = frequencies[i_min:i_max]
         amp = abs(amplitudes.real[i_min:i_max])
 
-        hf = freq[np.where(amp == max(amp))[0][0]]
-
-        delta = args.t
-        best = 0
-
-        for f in [1209, 1336, 1477, 1633]:
-            if abs(hf-f) < delta:
-                delta = abs(hf-f)
-                best = f
-
-        if debug:
-            plt.plot(freq, amp)
-            plt.annotate(str(int(hf))+"Hz", xy=(hf, max(amp)))
-
-        hf = best
+        hf = findbest(freq, amp, args.t, [1209, 1336, 1477, 1633])
 
         if debug:
             plt.yticks([])
