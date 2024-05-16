@@ -95,6 +95,8 @@ try:
             plt.plot(signal)
             plt.xticks([])
             plt.yticks([])
+            plt.subplot(313)
+            plt.title("Fourier transform")
 
 
         frequencies = np.fft.fftfreq(signal.size, d=1/fps)
@@ -118,8 +120,6 @@ try:
                 best = f
 
         if debug:
-            plt.subplot(313)
-            plt.title("Fourier transform")
             plt.plot(freq, amp)
             plt.yticks([])
             plt.annotate(str(int(lf))+"Hz", xy=(lf, max(amp)))
@@ -150,6 +150,7 @@ try:
         hf = best
 
         if debug:
+            plt.yticks([])
             if lf == 0 or hf == 0:
                 txt = "Unknown dial tone"
             else:
