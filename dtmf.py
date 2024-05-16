@@ -73,6 +73,10 @@ if verbose:
 try:
     for i in range(0, len(data)-step, step):
         signal = data[i:i+step]
+        # Since Fourier transforms work best on periodic signals, we can
+        # fake it for this slice of signal by appending a mirrored
+        # copy. This helps limit the noise in low-frequency bins.
+        signal = np.append(signal, np.flip(signal))
 
         if debug:
             plt.subplot(311)
