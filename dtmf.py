@@ -51,7 +51,7 @@ elif args.right and not args.left:
         print ("Warning: The sound is not mono and not stereo ("+str(data.shape[1])+" canals)... so the -r option was ignored.")
 
 else:
-    if len(data.shape) == 2: 
+    if len(data.shape) == 2:
         data = data.sum(axis=1) # stereo
 
 precision = args.i
@@ -88,15 +88,15 @@ try:
             plt.plot(signal)
             plt.xticks([])
             plt.yticks([])
-        
-        
+
+
         frequencies = np.fft.fftfreq(signal.size, d=1/fps)
         amplitudes = np.fft.fft(signal)
 
         # Low
         i_min = np.where(frequencies > 0)[0][0]
         i_max = np.where(frequencies > 1050)[0][0]
-        
+
         freq = frequencies[i_min:i_max]
         amp = abs(amplitudes.real[i_min:i_max])
 
