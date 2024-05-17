@@ -14,7 +14,10 @@ parser.add_argument("-l", "--left", help="left channel only (if the sound is ste
 parser.add_argument("-r", "--right", help="right channel only (if the sound is stereo)", action="store_true")
 parser.add_argument("-d", "--debug", help="show graphs to debug", action="store_true")
 parser.add_argument("-t", type=int, metavar="F", help="acceptable frequency error (in hertz, 20 by default)", default=20)
-parser.add_argument("-i", type=float, metavar='T', help="process by T seconds intervals (0.04 by default)", default=0.04)
+parser.add_argument("-i", type=float, metavar='T', help="process by T seconds intervals (0.05 by default)", default=0.05)
+parser.add_argument("-f", type=float, metavar="FRAC", help="process by shifting interval by 1/FRAC (2.0 by default)", default=2.0)
+parser.add_argument("-s", type=float, metavar="SD", help="ignore signals less than SD above median (3.0 by default)", default=3.0)
+parser.add_argument("-m", type=float, metavar="MIN", help="ignore hf signals less than 1/MIN above lf (3.0 by default)", default=3.0)
 
 parser.add_argument('file', type=argparse.FileType('r'))
 
@@ -51,18 +54,26 @@ elif args.right and not args.left:
         print ("Warning: The sound is not mono and not stereo ("+str(data.shape[1])+" canals)... so the -r option was ignored.")
 
 else:
-    if len(data.shape) == 2: 
+    if len(data.shape) == 2:
         data = data.sum(axis=1) # stereo
 
 precision = args.i
 
 duration = len(data)/fps
 
-step = int(len(data)//(duration//precision))
+window = int(len(data)//(duration//precision))
+
+step = int(window//args.f)
 
 debug = args.debug
 verbose = args.verbose
 c = ""
+
+lfset = set()
+hfset = set()
+for key in dtmf:
+    lfset.add(key[0])
+    hfset.add(key[1])
 
 if debug:
     print("Warning:\nThe debug mode is very uncomfortable: you need to close each window to continue.\nFeel free to kill the process doing CTRL+C and then close the window.\n")
@@ -70,9 +81,64 @@ if debug:
 if verbose:
     print ("0:00 ", end='', flush=True)
 
+def findbest(freq, amp, maxdelta, minamp, freqlist):
+    # Look for signals 3+ deviations (by default) above the median
+    medf = np.median(amp)
+    sdf = np.std(amp)
+    sdbound = medf + args.s * sdf
+    # Also obey any given minimum amplitude
+    bound = max(minamp, sdbound)
+
+    # If there is no such signal, just try the strongest
+    fpos = np.where(amp >= bound)[0]
+    if len(fpos) == 0:
+        fpos = np.where(amp == max(amp))[0]
+
+    # Find the strongest signal that is close enough (within maxdelta) of
+    # one we're looking for
+    bestamp = 0
+    bestidealf = 0
+    bestrealf = 0
+
+    for pos in fpos:
+        if bestamp >= amp[pos]:
+            continue
+        delta = maxdelta
+        realf = freq[pos]
+        for idealf in freqlist:
+            if abs(realf-idealf) < delta:
+                delta = abs(realf-idealf)
+                bestidealf = idealf
+        if delta < maxdelta:
+            bestamp = amp[pos]
+            bestrealf = realf
+
+    # If we found no matching ideal signal, return the strongest signal given
+    if bestamp == 0:
+        bestamp = max(amp)
+
+    if debug:
+        plt.plot(freq, amp, color='blue' if minamp == 0 else 'green')
+        plt.plot([freq[0], freq[-1]], [sdbound, sdbound],
+                 linestyle='dashed', color='orange')
+        if minamp:
+            plt.plot([freq[0], freq[-1]], [minamp, minamp],
+                     linestyle='dashed', color='red')
+        for f in freq[fpos]:
+            a = amp[np.where(freq == f)]
+            plt.annotate(str(int(f))+"Hz",
+                         xy=(f, a),
+                         color='green' if f == bestrealf else 'orange')
+
+    return [bestidealf, bestamp]
+
 try:
-    for i in range(0, len(data)-step, step):
-        signal = data[i:i+step]
+    for i in range(0, len(data)-window, step):
+        signal = data[i:i+window]
+        # Since Fourier transforms work best on periodic signals, we can
+        # fake it for this slice of signal by appending a mirrored
+        # copy. This helps limit the noise in low-frequency bins.
+        signal = np.append(signal, np.flip(signal))
 
         if debug:
             plt.subplot(311)
@@ -82,42 +148,27 @@ try:
             plt.xticks([])
             plt.yticks([])
             plt.axvline(x=i, linewidth=1, color='red')
-            plt.axvline(x=i+step, linewidth=1, color='red')
+            plt.axvline(x=i+window, linewidth=1, color='red')
             plt.subplot(312)
             plt.title("analysed frame")
             plt.plot(signal)
             plt.xticks([])
             plt.yticks([])
-        
-        
+            plt.subplot(313)
+            plt.title("Fourier transform")
+
+
         frequencies = np.fft.fftfreq(signal.size, d=1/fps)
         amplitudes = np.fft.fft(signal)
 
         # Low
         i_min = np.where(frequencies > 0)[0][0]
         i_max = np.where(frequencies > 1050)[0][0]
-        
+
         freq = frequencies[i_min:i_max]
         amp = abs(amplitudes.real[i_min:i_max])
 
-        lf = freq[np.where(amp == max(amp))[0][0]]
-
-        delta = args.t
-        best = 0
-
-        for f in [697, 770, 852, 941]:
-            if abs(lf-f) < delta:
-                delta = abs(lf-f)
-                best = f
-
-        if debug:
-            plt.subplot(313)
-            plt.title("Fourier transform")
-            plt.plot(freq, amp)
-            plt.yticks([])
-            plt.annotate(str(int(lf))+"Hz", xy=(lf, max(amp)))
-
-        lf = best
+        [lf, lfamp] = findbest(freq, amp, args.t, 0, list(lfset))
 
         # High
         i_min = np.where(frequencies > 1100)[0][0]
@@ -126,23 +177,13 @@ try:
         freq = frequencies[i_min:i_max]
         amp = abs(amplitudes.real[i_min:i_max])
 
-        hf = freq[np.where(amp == max(amp))[0][0]]
+        minamp = lfamp // args.m;
 
-        delta = args.t
-        best = 0
+        [hf, hfamp] = findbest(freq, amp, args.t, minamp, list(hfset))
 
-        for f in [1209, 1336, 1477, 1633]:
-            if abs(hf-f) < delta:
-                delta = abs(hf-f)
-                best = f
 
         if debug:
-            plt.plot(freq, amp)
-            plt.annotate(str(int(hf))+"Hz", xy=(hf, max(amp)))
-
-        hf = best
-
-        if debug:
+            plt.yticks([])
             if lf == 0 or hf == 0:
                 txt = "Unknown dial tone"
             else:
@@ -150,9 +191,9 @@ try:
             plt.xlabel(txt)
 
 
-        t = int(i//step * precision)
+        t = int(i//window * precision)
 
-        if verbose and t > int((i-1)//step * precision):
+        if verbose and t > int((i-step)//window * precision):
             m = str(int(t//60))
             s = str(t%60)
             s = "0"*(2-len(s)) + s
