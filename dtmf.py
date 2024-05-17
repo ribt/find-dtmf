@@ -16,6 +16,8 @@ parser.add_argument("-d", "--debug", help="show graphs to debug", action="store_
 parser.add_argument("-t", type=int, metavar="F", help="acceptable frequency error (in hertz, 20 by default)", default=20)
 parser.add_argument("-i", type=float, metavar='T', help="process by T seconds intervals (0.04 by default)", default=0.04)
 parser.add_argument("-f", type=float, metavar="FRAC", help="process by shifting interval by 1/FRAC (3.0 by default)", default=3.0)
+parser.add_argument("-s", type=float, metavar="SD", help="ignore signals less than SD above median (3.0 by default)", default=3.0)
+parser.add_argument("-m", type=float, metavar="MIN", help="ignore hf signals less than 1/MIN above lf (3.0 by default)", default=3.0)
 
 parser.add_argument('file', type=argparse.FileType('r'))
 
@@ -73,22 +75,56 @@ if debug:
 if verbose:
     print ("0:00 ", end='', flush=True)
 
-def findbest(freq, amp, maxdelta, freqlist):
-    maxf = freq[np.where(amp == max(amp))[0][0]]
+def findbest(freq, amp, maxdelta, minamp, freqlist):
+    # Look for signals 3+ deviations (by default) above the median
+    medf = np.median(amp)
+    sdf = np.std(amp)
+    sdbound = medf + args.s * sdf
+    # Also obey any given minimum amplitude
+    bound = max(minamp, sdbound)
 
-    delta = maxdelta
-    best = 0
+    # If there is no such signal, just try the strongest
+    fpos = np.where(amp >= bound)[0]
+    if len(fpos) == 0:
+        fpos = np.where(amp == max(amp))[0]
 
-    for f in freqlist:
-        if abs(maxf-f) < delta:
-            delta = abs(maxf-f)
-            best = f
+    # Find the strongest signal that is close enough (within maxdelta) of
+    # one we're looking for
+    bestamp = 0
+    bestidealf = 0
+    bestrealf = 0
+
+    for pos in fpos:
+        if bestamp >= amp[pos]:
+            continue
+        delta = maxdelta
+        realf = freq[pos]
+        for idealf in freqlist:
+            if abs(realf-idealf) < delta:
+                delta = abs(realf-idealf)
+                bestidealf = idealf
+        if delta < maxdelta:
+            bestamp = amp[pos]
+            bestrealf = realf
+
+    # If we found no matching ideal signal, return the strongest signal given
+    if bestamp == 0:
+        bestamp = max(amp)
 
     if debug:
-        plt.plot(freq, amp)
-        plt.annotate(str(int(maxf))+"Hz", xy=(maxf, max(amp)))
+        plt.plot(freq, amp, color='blue' if minamp == 0 else 'green')
+        plt.plot([freq[0], freq[-1]], [sdbound, sdbound],
+                 linestyle='dashed', color='orange')
+        if minamp:
+            plt.plot([freq[0], freq[-1]], [minamp, minamp],
+                     linestyle='dashed', color='red')
+        for f in freq[fpos]:
+            a = amp[np.where(freq == f)]
+            plt.annotate(str(int(f))+"Hz",
+                         xy=(f, a),
+                         color='green' if f == bestrealf else 'orange')
 
-    return best
+    return [bestidealf, bestamp]
 
 try:
     for i in range(0, len(data)-window, step):
@@ -126,7 +162,7 @@ try:
         freq = frequencies[i_min:i_max]
         amp = abs(amplitudes.real[i_min:i_max])
 
-        lf = findbest(freq, amp, args.t, [697, 770, 852, 941])
+        [lf, lfamp] = findbest(freq, amp, args.t, 0, [697, 770, 852, 941])
 
         # High
         i_min = np.where(frequencies > 1100)[0][0]
@@ -135,7 +171,10 @@ try:
         freq = frequencies[i_min:i_max]
         amp = abs(amplitudes.real[i_min:i_max])
 
-        hf = findbest(freq, amp, args.t, [1209, 1336, 1477, 1633])
+        minamp = lfamp // args.m;
+
+        [hf, hfamp] = findbest(freq, amp, args.t, minamp, [1209, 1336, 1477, 1633])
+
 
         if debug:
             plt.yticks([])
