@@ -69,6 +69,12 @@ debug = args.debug
 verbose = args.verbose
 c = ""
 
+lfset = set()
+hfset = set()
+for key in dtmf:
+    lfset.add(key[0])
+    hfset.add(key[1])
+
 if debug:
     print("Warning:\nThe debug mode is very uncomfortable: you need to close each window to continue.\nFeel free to kill the process doing CTRL+C and then close the window.\n")
 
@@ -162,7 +168,7 @@ try:
         freq = frequencies[i_min:i_max]
         amp = abs(amplitudes.real[i_min:i_max])
 
-        [lf, lfamp] = findbest(freq, amp, args.t, 0, [697, 770, 852, 941])
+        [lf, lfamp] = findbest(freq, amp, args.t, 0, list(lfset))
 
         # High
         i_min = np.where(frequencies > 1100)[0][0]
@@ -173,7 +179,7 @@ try:
 
         minamp = lfamp // args.m;
 
-        [hf, hfamp] = findbest(freq, amp, args.t, minamp, [1209, 1336, 1477, 1633])
+        [hf, hfamp] = findbest(freq, amp, args.t, minamp, list(hfset))
 
 
         if debug:
