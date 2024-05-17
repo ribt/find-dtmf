@@ -14,8 +14,8 @@ parser.add_argument("-l", "--left", help="left channel only (if the sound is ste
 parser.add_argument("-r", "--right", help="right channel only (if the sound is stereo)", action="store_true")
 parser.add_argument("-d", "--debug", help="show graphs to debug", action="store_true")
 parser.add_argument("-t", type=int, metavar="F", help="acceptable frequency error (in hertz, 20 by default)", default=20)
-parser.add_argument("-i", type=float, metavar='T', help="process by T seconds intervals (0.04 by default)", default=0.04)
-parser.add_argument("-f", type=float, metavar="FRAC", help="process by shifting interval by 1/FRAC (3.0 by default)", default=3.0)
+parser.add_argument("-i", type=float, metavar='T', help="process by T seconds intervals (0.05 by default)", default=0.05)
+parser.add_argument("-f", type=float, metavar="FRAC", help="process by shifting interval by 1/FRAC (2.0 by default)", default=2.0)
 parser.add_argument("-s", type=float, metavar="SD", help="ignore signals less than SD above median (3.0 by default)", default=3.0)
 parser.add_argument("-m", type=float, metavar="MIN", help="ignore hf signals less than 1/MIN above lf (3.0 by default)", default=3.0)
 
